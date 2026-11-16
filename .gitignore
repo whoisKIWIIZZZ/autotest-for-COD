@@ -1,0 +1,6 @@
+.sim/
+.venv/
+__pycache__/
+.work/
+data/
+.pytest_cache/

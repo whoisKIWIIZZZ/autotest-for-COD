@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>SCPU 排行榜</title>
+    <link rel="stylesheet" href="/static/style.css?v=three-programs" />
+    <script src="/static/leaderboard.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header class="page-header">
+        <div><p class="eyebrow">计算机组成实验</p><h1>SCPU 排行榜</h1></div>
+        <nav class="nav" aria-label="页面导航">
+          <a href="/">提交页</a>
+          <a href="/dashboard">后台</a>
+        </nav>
+      </header>
+
+      <p id="leader-error" class="notice error" role="alert" hidden></p>
+      <div id="leader-stats" class="cards"></div>
+
+      <section class="panel" aria-labelledby="ranking-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="ranking-heading">RTL 正式成绩</h2>
+            <p id="leader-rule" class="muted small">只统计真实观测到完整 AC 闪烁与四次右移闭环的 RTL 正式提交。</p>
+          </div>
+          <div class="toolbar">
+            <span id="leader-updated" class="muted small">正在读取…</span>
+            <button id="leader-refresh" type="button">刷新</button>
+          </div>
+        </div>
+        <p id="leader-empty" class="muted" hidden>还没有 RTL 正式评测记录。</p>
+        <div class="table-scroll">
+          <table id="leader-table" hidden>
+            <caption class="sr-only">按最高分、通过次数排序的 RTL 正式成绩</caption>
+            <thead>
+              <tr>
+                <th scope="col">名次</th>
+                <th scope="col">学号 / 标识</th>
+                <th scope="col">姓名</th>
+                <th scope="col">最高分</th>
+                <th scope="col">通过次数</th>
+                <th scope="col">正式提交</th>
+                <th scope="col">首次通过</th>
+                <th scope="col">最近评测</th>
+              </tr>
+            </thead>
+            <tbody id="leader-body"></tbody>
+          </table>
+        </div>
+        <p id="leader-debug" class="muted small"></p>
+      </section>
+
+      <footer class="muted small">
+        EDF 提交属于调试成绩，单独记录，不进入排名；排行榜只依据 RTL 正式提交。
+      </footer>
+    </main>
+  </body>
+</html>

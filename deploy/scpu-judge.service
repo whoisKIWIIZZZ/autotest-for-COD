@@ -1,0 +1,21 @@
+[Unit]
+Description=SCPU 自动评测服务
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/autotest-COD/app
+Environment=SCPU_ALLOWED_HOSTS=113.44.180.58,localhost,127.0.0.1,[::1]
+Environment=SCPU_BUILD_JOBS=1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/autotest-COD/app/.venv/bin/python server.py --host 0.0.0.0 --port 8100
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+KillMode=mixed
+LimitNOFILE=65536
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

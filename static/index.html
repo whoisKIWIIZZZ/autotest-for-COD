@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>AutoTestCOD</title>
+    <link rel="stylesheet" href="/static/style.css?v=three-programs" />
+    <script src="/static/app.js?v=three-programs" defer></script>
+  </head>
+  <body>
+    <main>
+      <header class="page-header">
+        <div><p class="eyebrow"></p><h1>AutoTestCOD</h1></div>
+        <p class="muted">提交 CPU,查看各测试程序的真实仿真记录与显示结果.</p>
+      </header>
+      <nav class="nav" aria-label="页面导航">
+        <a href="/leaderboard">排行榜</a>
+      </nav>
+      <p id="page-error" class="notice error" role="alert" hidden></p>
+      <button id="config-retry" type="button" hidden>重新加载配置</button>
+      <div class="workspace">
+        <section class="panel submission-panel" aria-labelledby="submission-heading">
+          <h2 id="submission-heading">提交作业</h2>
+          <form id="submission-form">
+            <fieldset id="submission-fields" disabled>
+              <label for="student-id">学号 / 标识</label>
+              <input id="student-id" name="student_id" type="text" maxlength="64" autocomplete="username" required />
+              <label for="student-name">姓名</label>
+              <input id="student-name" name="student_name" type="text" maxlength="64" autocomplete="name" required />
+              <div class="fixed-problem"><span class="muted">评测题目</span><strong>SCPU</strong></div>
+              <p id="submission-cases" class="muted small">正在读取默认测试程序…</p>
+              <label for="kind">提交模式</label>
+              <select id="kind" name="kind" aria-describedby="mode-help">
+                <option value="rtl">RTL · 正式成绩</option>
+                <option value="edf">EDF · 调试成绩</option>
+              </select>
+              <p id="mode-help" class="muted small"></p>
+              <p id="submission-debug" class="badge debug" hidden>EDF 调试,不计入 RTL 正式成绩</p>
+              <label for="files">选择提交文件</label>
+              <input id="files" name="files" type="file" multiple accept=".v,.sv,.vh,.svh" aria-describedby="file-help file-summary" />
+              <p id="file-help" class="muted small">正在读取上传限制…</p>
+              <ul id="selected-files" class="file-list" aria-label="已选择的文件"></ul>
+              <p id="file-summary" class="muted small" aria-live="polite">尚未选择文件.</p>
+              <p id="form-error" class="error small" role="alert" hidden></p>
+              <button id="submit-button" class="primary" type="submit">提交并评测</button>
+            </fieldset>
+          </form>
+          <p class="muted small">仅提交 SCPU 及其 RTL 依赖.</p>
+        </section>
+
+        <section class="panel detail-panel" aria-labelledby="detail-heading">
+          <div class="section-heading"><h2 id="detail-heading">评测记录</h2><span id="run-status" class="badge" hidden></span></div>
+          <p id="detail-empty" class="muted">提交作业,或从下方选择本浏览器的历史记录.</p>
+          <p id="detail-error" class="error small" role="status" hidden></p>
+          <div id="run-detail" hidden>
+            <div class="run-heading"><h3 id="run-title"></h3><span id="run-debug" class="badge debug" hidden>EDF 调试</span></div>
+            <p id="run-student" class="muted small"></p>
+            <div class="score-line"><span id="score-label"></span><strong id="run-score">尚未评分</strong></div>
+            <p id="run-summary" aria-live="polite"></p>
+            <dl id="run-metadata" class="metadata"></dl>
+
+            <section aria-labelledby="cases-heading">
+              <h3 id="cases-heading">测试程序结果</h3>
+              <p id="cases-empty" class="muted small">正在读取测试程序状态…</p>
+              <div class="table-scroll"><table id="cases-table" class="case-table" hidden><caption class="sr-only">各测试程序的独立评测结果</caption><thead><tr><th scope="col">程序</th><th scope="col">状态</th><th scope="col">CPU 周期</th><th scope="col">实际显示帧数</th><th scope="col">目标显示</th><th scope="col">结果说明</th></tr></thead><tbody id="cases-body"></tbody></table></div>
+              <label for="testcase-select">查看测试程序</label>
+              <select id="testcase-select" aria-describedby="case-description" disabled></select>
+              <p id="case-description" class="muted small" aria-live="polite">各程序的显示帧、时间与检查结果独立记录。</p>
+            </section>
+
+            <section class="playback" aria-labelledby="playback-heading">
+              <div class="section-heading"><h3 id="playback-heading">数码管回放</h3><span id="frames-state" class="muted small">等待实际帧</span></div>
+              <p class="muted small">低电平点亮,位 0–6 对应 a–g,位 7 为小数点.右侧为字节 0；板上八位显示将这四字节重复两次.</p>
+              <div id="seven-segment" class="display" role="img" aria-label="尚无实际显示帧"></div>
+              <p id="frames-empty" class="muted small">尚未收到实际显示帧；不会生成示例动画.</p>
+              <div class="playback-controls">
+                <button id="play-toggle" type="button" disabled>播放</button>
+                <button id="frame-first" type="button" disabled aria-label="查看第一帧">首帧</button>
+                <button id="frame-previous" type="button" disabled aria-label="查看上一帧">上一帧</button>
+                <button id="frame-next" type="button" disabled aria-label="查看下一帧">下一帧</button>
+                <label class="inline-label" for="play-speed">速度
+                  <select id="play-speed"><option value="1">1 倍</option><option value="4" selected>4 倍</option><option value="16">16 倍</option><option value="64">64 倍</option></select>
+                </label>
+              </div>
+              <p class="muted small">按实际时间间隔缩放回放；极短间隔至少展示 16 毫秒,保留每一个中间帧与重复写入,不改变仿真记录.</p>
+              <label for="frame-slider" class="small">逐帧查看（保留中间帧与重复写入）</label>
+              <input id="frame-slider" type="range" min="0" max="0" value="0" step="1" disabled />
+              <label class="checkbox-label"><input id="follow-live" type="checkbox" checked /> 跟随最新实际帧</label>
+              <dl class="frame-readout metadata">
+                <div><dt>帧</dt><dd id="frame-number">—</dd></div>
+                <div><dt>CPU 周期</dt><dd id="frame-cycle">—</dd></div>
+                <div><dt>真实仿真时间</dt><dd id="frame-time">—</dd></div>
+                <div><dt>显示字</dt><dd id="frame-word">—</dd></div>
+                <div><dt>PC</dt><dd id="frame-pc">—</dd></div>
+                <div><dt>阶段</dt><dd id="frame-phase">—</dd></div>
+              </dl>
+              <p id="loop-summary" class="loop-summary" hidden></p>
+              <button id="loop-replay" type="button" hidden>回放已观测完整循环</button>
+            </section>
+
+            <section aria-labelledby="checks-heading">
+              <h3 id="checks-heading">结果检查</h3>
+              <p id="checks-empty" class="muted small">尚无最终检查结果.</p>
+              <ul id="result-checks" class="checks"></ul>
+              <details id="result-extra" hidden><summary>完整评测结果</summary><pre id="result-json"></pre></details>
+            </section>
+
+            <section aria-labelledby="logs-heading">
+              <div class="section-heading"><h3 id="logs-heading">运行日志</h3><label class="checkbox-label small"><input id="follow-log" type="checkbox" checked /> 自动滚动</label></div>
+              <p id="log-state" class="muted small">等待日志.</p>
+              <pre id="run-log" class="log" tabindex="0" aria-label="运行日志"></pre>
+            </section>
+
+            <section aria-labelledby="artifacts-heading">
+              <div class="section-heading"><h3 id="artifacts-heading">全部运行文件</h3><button id="artifacts-refresh" type="button">刷新文件</button></div>
+              <p id="artifacts-state" class="muted small">运行结束后生成完整文件索引.</p>
+              <div class="table-scroll"><table id="artifacts-table" hidden><caption class="sr-only">本次评测的输入、日志、构建、仿真与结果文件</caption><thead><tr><th scope="col">文件 / 下载</th><th scope="col">大小</th><th scope="col">SHA-256</th></tr></thead><tbody id="artifacts-body"></tbody></table></div>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel history-panel" aria-labelledby="history-heading">
+        <div class="section-heading"><div><h2 id="history-heading">我的提交记录</h2><p class="muted small">仅显示当前浏览器 owner cookie 所属记录,EDF 调试与 RTL 正式成绩分开标识.</p></div><button id="history-refresh" type="button">刷新记录</button></div>
+        <p id="history-error" class="error small" role="status" hidden></p>
+        <p id="history-empty" class="muted">正在读取历史记录…</p>
+        <div class="table-scroll"><table id="history-table" hidden><caption class="sr-only">可选择的评测记录</caption><thead><tr><th scope="col">记录</th><th scope="col">学生</th><th scope="col">成绩类别</th><th scope="col">状态</th><th scope="col">分数</th><th scope="col">提交时间</th></tr></thead><tbody id="history-body"></tbody></table></div>
+        <div class="pagination"><button id="history-previous" type="button" disabled>上一页</button><span id="history-page" class="muted small">—</span><button id="history-next" type="button" disabled>下一页</button></div>
+      </section>
+      <footer class="muted small">shout out to @whoisKIWIIZZZ,@Larry.</footer>
+    </main>
+  </body>
+</html>
