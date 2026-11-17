@@ -11,6 +11,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+// macOS <signal.h> defines sigemptyset as a macro (in addition to declaring
+// the real function), which breaks the scope-qualified call below.
+#if defined(sigemptyset)
+#undef sigemptyset
+#endif
+
 // Dedicated diagnostic transport: fixed storage, explicit little-endian words,
 // and FIFO-only output. A reader closing the pipe is normal cancellation.
 class TraceStream {

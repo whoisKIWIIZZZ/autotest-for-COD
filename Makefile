@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python
 RISCV_PREFIX ?= riscv64-unknown-elf-
-PORT ?= 8000
+PORT ?= 8070
 KIND ?= edf
 FILES ?= edf_file/SCPU.edf
 STUDENT_ID ?= local

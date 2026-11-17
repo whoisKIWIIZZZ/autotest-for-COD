@@ -1,7 +1,7 @@
 # autotest for COD
 
-Behavior simulation using Verilator. 
-Contributed @[whoisKIWIIZZZ](https://github.com/whoisKIWIIZZZ),@[Larry](https://github.com/Larryyyyyyy).
+Behavior simulation using **Verilator**. 
+Contributor@[whoisKIWIIZZZ](https://github.com/whoisKIWIIZZZ),@[Larry](https://github.com/Larryyyyyyy).
 
 Cases:
 - Fast Exponentiation. [Check this](./programs/fastpow.coe) [and this](./programs/fastpow.S).
@@ -15,15 +15,15 @@ Cases:
 | `testac-simple` | `testac-simple.S`、`testac-simple.coe` | AC（`0xff88c6ff`） | 原 testac 程序,首次完整显示 AC 即通过 |
 
 ## Submit
-Your CPU should be warpped in the file like [this](./programs/SCPU-template.v).
+Your CPU **should be** warpped in the file like [this](./programs/SCPU-template.v).
 Some to note:
-- the CPU doesn't contain the DataMemory Module. However, it wrapped in `dm_controller.v` in [here](./edf_file/dm_controller.v).
+- the CPU should not contain the DataMemory Module. However, it wrapped in `dm_controller.v` in [here](./edf_file/dm_controller.v).
 - you **should not** submit ROM/RAM/clk_div file.
-- Remember, this is just **behavioral simulation**. This just test whether your CPU is logically right, which ignoring timing constraints.
+- Remember, this is just **behavioral simulation**. This just tests whether your CPU is logically right, ignoring timing constraints.
 
 ## eval offline
 
-**Only tested in Unix-based OS!**
+**Only tested in macOS! This part is fking AI slop.**
 
 ```sh
 mkdir -p .work/tmp
@@ -32,8 +32,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 make serve
 ```
-
-open `http://127.0.0.1:8000/`.
+Open `http://127.0.0.1:8070/`.
 
 Or you could test CLI:
 
@@ -43,20 +42,18 @@ make grade KIND=rtl FILES="core/SCPU.v core/alu.v" # of course, FILE should incl
 .venv/bin/python judge.py --kind edf edf_file/SCPU.edf --cases testac
 ```
 
-`make check` 运行判定、存储及 Icarus/Verilator 原语行为测试.`make convert` 执行 EDF 到 Verilog 转换.`testac-simple` 保留原汇编、COE 和延时循环.运行 `make programs` 使用 GNU RISC-V 工具链重新生成快速幂与 fib 映像,默认前缀为 `riscv64-unknown-elf-`,可通过 `RISCV_PREFIX` 修改.快速幂通过 RV32I 移位加法计算乘积的低 32 位,保留三层展开和递归栈帧.
-
 As for students, you could ignore `edf`.
 
-
-## 失败诊断
+for more check [here](./docs/server-README.md), but that doc seems to be useless.
+<!-- ## 失败诊断
 
 失败用例会与可信 `edf_file/SCPU.edf` 复放结果逐 CPU 周期比较，保存首个差异及双方前后各 10 条指令。学生页面和后台分别展示 `[预期行为]`、`[错误行为]`，运行文件提供 `first_diff.txt`、`first_diff.json` 下载。
 
 比较 PC 转移、写使能、显示字及有效访存行为。参考寄存器取自 EDF 触发器；提交侧展示 SCPU 公开接口。流水线或停顿策略会影响首差位置，诊断不参与成绩判定。编译失败、执行证据缺失及复放错误会说明具体原因。
 
-复放通过有界管道传输，只保存最多 21 条记录的窗口；参考模型按内容缓存。历史失败记录可运行 `.venv/bin/python sim/backfill_diagnostics.py` 补充诊断，原成绩和评测时间保持不变。详见 [服务器说明](./docs/server-README.md#首差异诊断)。
+复放通过有界管道传输，只保存最多 21 条记录的窗口；参考模型按内容缓存。历史失败记录可运行 `.venv/bin/python sim/backfill_diagnostics.py` 补充诊断，原成绩和评测时间保持不变。详见 [服务器说明](./docs/server-README.md#首差异诊断)。 -->
 
-## APIs
+<!-- ## APIs
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -88,7 +85,7 @@ SCPU_ALLOWED_HOSTS=203.0.113.10,localhost,127.0.0.1 SCPU_BUILD_JOBS=1 \
 
 - 编译和仿真都在沙箱内运行：macOS 使用 `sandbox-exec`,Linux 使用 `bubblewrap`（`--unshare-all`,独立网络命名空间,根文件系统只读）.写入仅限本次运行目录（编译：`work/`、`tmp/`；仿真：`work/runtime/`、`tmp/`）,网络全部禁止；macOS 仿真进程只能执行自身,不能再 fork.
 - 源文件检查拒绝 `force`/`release`/`bind`、DPI、`protect` 等控制指令,`include` 只能引用本次提交内的文件；提交的 RTL 先做 Verilator 预处理再复查,宏不能绕过后置检查.
-- EDF 提交必须顶层为 `SCPU`、只含支持的原语；转换器校验标识符和 `INIT` 数值属性,防止网表注入生成代码.
+- EDF 提交必须顶层为 `SCPU`、只含支持的原语；转换器校验标识符和 `INIT` 数值属性,防止网表注入生成代码. -->
 
 
 ## Acknowlegement
