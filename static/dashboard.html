@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>SCPU 评测后台</title>
-    <link rel="stylesheet" href="/static/style.css?v=three-programs" />
-    <script src="/static/dashboard.js?v=three-programs" defer></script>
+    <link rel="stylesheet" href="/static/style.css?v=first-diff-1" />
+    <script src="/static/first-diff.js?v=first-diff-1" defer></script>
+    <script src="/static/dashboard.js?v=first-diff-1" defer></script>
   </head>
   <body class="dashboard">
     <main>
@@ -111,6 +112,12 @@
           <h3 id="detail-cases-heading">测试程序结果</h3>
           <p id="detail-cases-empty" class="muted small">正在读取测试程序状态…</p>
           <div class="table-scroll"><table id="detail-cases-table" class="case-table" aria-labelledby="detail-cases-heading" hidden><thead><tr><th scope="col">程序</th><th scope="col">状态</th><th scope="col">CPU 周期</th><th scope="col">实际显示帧数</th><th scope="col">目标显示</th><th scope="col">结果说明</th></tr></thead><tbody id="detail-cases-body"></tbody></table></div>
+
+          <section aria-labelledby="detail-first-diff-heading">
+            <h3 id="detail-first-diff-heading">首差异诊断</h3>
+            <p class="muted small">各测试程序独立诊断。每侧最多保留首差异前后各 10 个 CPU 周期；JSON / 文本报告可在运行文件中下载。</p>
+            <div id="detail-first-diffs"></div>
+          </section>
 
           <h3>逐项检查</h3>
           <ul id="detail-checks" class="checks"></ul>

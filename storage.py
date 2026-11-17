@@ -12,6 +12,7 @@ from urllib.parse import quote
 import psutil
 
 from sim.cases import DEFAULT_CASE_IDS, select_cases, suite_evidence_complete
+from sim.trace_compare import TraceComparison, write_report
 
 
 ROOT = Path(__file__).resolve().parent
@@ -234,6 +235,14 @@ class RunStore:
         result.update(score=score, kind=row["kind"], is_debug=bool(row["is_debug"]),
                       score_label="EDF 调试成绩" if row["is_debug"] else "RTL 成绩")
         directory = Path(row["directory"])
+        if status != "accepted" and not result.get("first_diff"):
+            report = next((item["first_diff"] for item in result.get("cases", [])
+                           if item.get("first_diff")), None)
+            if report is None:
+                report = TraceComparison().finish("任务未完成硬件执行：" + str(result.get("summary", status)))
+                report["status"] = "unavailable"
+                write_report(directory / "work/runtime/run", report)
+            result["first_diff"] = report
         write_json(directory / "result.json", result)
         with (directory / "logs" / "run.log").open("a", encoding="utf-8") as log:
             log.write(f"\n[{now()}] status={status} score={score} debug={bool(row['is_debug'])}\n")

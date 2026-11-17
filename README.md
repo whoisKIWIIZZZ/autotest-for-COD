@@ -48,6 +48,14 @@ make grade KIND=rtl FILES="core/SCPU.v core/alu.v" # of course, FILE should incl
 As for students, you could ignore `edf`.
 
 
+## 失败诊断
+
+失败用例会与可信 `edf_file/SCPU.edf` 复放结果逐 CPU 周期比较，保存首个差异及双方前后各 10 条指令。学生页面和后台分别展示 `[预期行为]`、`[错误行为]`，运行文件提供 `first_diff.txt`、`first_diff.json` 下载。
+
+比较 PC 转移、写使能、显示字及有效访存行为。参考寄存器取自 EDF 触发器；提交侧展示 SCPU 公开接口。流水线或停顿策略会影响首差位置，诊断不参与成绩判定。编译失败、执行证据缺失及复放错误会说明具体原因。
+
+复放通过有界管道传输，只保存最多 21 条记录的窗口；参考模型按内容缓存。历史失败记录可运行 `.venv/bin/python sim/backfill_diagnostics.py` 补充诊断，原成绩和评测时间保持不变。详见 [服务器说明](./docs/server-README.md#首差异诊断)。
+
 ## APIs
 
 | 方法 | 路径 | 说明 |

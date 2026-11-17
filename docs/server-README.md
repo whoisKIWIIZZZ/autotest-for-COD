@@ -49,6 +49,28 @@ make grade KIND=rtl FILES="core/SCPU.v core/alu.v"
 - 各例保留非法 PC、长时间停滞、显示长时间无进展和周期上限检查，并写入日志。
 - 结果是 `accepted`（100 分）、`wrong_answer`/`compile_error`/`time_limit`（0 分），环境问题为 `judge_error`（不计分）。
 
+## 首差异诊断
+
+`wrong_answer`、`time_limit` 用例在原评测结束后，使用原提交二进制和可信 CPU EDF 分别复放。两侧均执行真实板级逻辑、相同 ROM 和复位时序，六份 EDF 用于构建参考模型。比较器通过两个 FIFO 读取固定长度二进制记录，保留最近 10 条匹配记录；找到首差后收集其后 10 条记录，再关闭管道。后续记录只用于上下文，不再计算差异。每侧窗口最多 21 条，完整执行流不写入磁盘。
+
+比较项为 PC、next_pc、指令、写使能、显示字，以及 load/store 的有效地址、访存控制和读写数据。SB/SH 仅比较有效的低 8/16 位写数据；非访存指令的总线值只作上下文。每条记录的指令、PC 和访存信号采于 CPU 上升沿前，next_pc、显示字与参考寄存器采于上升沿后。按 CPU 周期进行比较，流水线或停顿策略可能改变首差位置；该诊断不参与成绩判定。
+
+可信 EDF 可读取实际触发器中的 ra、sp、s0/s1、a0–a3、s2/s3。通用提交 CPU 没有标准 RF 接口，错误侧展示其公开信号，寄存器字段为 null。编译失败、缺少执行周期或原始归档、复放环境错误均输出原因；仅已比较前缀相同的报告使用 `identical_prefix` 状态。执行起点或结束处不足十条上下文时保留实际可用条数。
+
+每例 `work/runtime/<case_id>/first_diff.json` 和 `first_diff.txt` 保存窗口、首次差异字段、参考 EDF SHA-256、参考构建键和 ROM SHA-256。结果中的 `cases[].first_diff` 提供页面所需数据，顶层 `first_diff` 指向首个失败用例的报告。学生页和后台展示 `[预期行为]`、`[错误行为]`，并提供原有归档下载。任务在编译或控制阶段终止时，`work/runtime/run/` 保存不可用说明。
+
+参考模型只在需要失败复放时构建，内容缓存位于 `.work/first-diff-reference/`。缓存键覆盖模型源码、转换器、六份 EDF、监测配置、Verilator 版本及架构；复用前检查二进制 SHA-256。缓存二进制复制进该次运行后按原沙箱规则执行。每个运行仍保留自己的输入快照和诊断文件。
+
+补充所有历史失败记录：
+
+```sh
+.venv/bin/python sim/backfill_diagnostics.py
+# 也可指定一条历史记录
+.venv/bin/python sim/backfill_diagnostics.py --run-id 10
+```
+
+补充程序等待线上评测空闲，复用原归档中的板级源码、外设和实际 ROM，重新编译原提交以启用传输器，只更新诊断、文件索引与结果 JSON。原状态、分数和评测时间保持不变。已存在诊断的记录跳过。
+
 ## 运行归档与数据库
 
 每次运行写入 `data/runs/<时间戳>-<随机串>/`：

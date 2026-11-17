@@ -247,10 +247,11 @@ function renderCases() {
   $("#case-description").textContent = item
     ? `${item.label || item.id}：${item.id === "testac-simple" ? "首次完整显示 AC 即完成，不要求动画闭环。" : item.id === "testac" ? "完整动画用例，以评测器的最终判定为准。" : "程序自检后写入真实 PASS / FAIL 显示。"}${item.success_word ? `目标显示 ${caseTarget(item)}。` : ""}显示帧、周期与时间均从本程序自身开始。${item.summary || ""}`
     : "各程序的显示帧、时间与检查结果独立记录。";
-  const signature = JSON.stringify([state.caseId, item, state.run?.result]);
+  const signature = JSON.stringify([state.caseId, item, state.run?.result, state.run?.state]);
   if (signature !== state.resultSignature) {
     state.resultSignature = signature;
     renderChecks(item);
+    FirstDiff.render($("#case-first-diff"), item ? [item] : [], { finished: state.run?.state === "finished" });
   }
 }
 

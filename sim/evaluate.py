@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from coe_to_hex import load_coe
 from sim.cases import (CASES, DEFAULT_CASE_IDS, MAX_RECORDED_FRAMES, inspect_case_frames,
                        select_cases, write_monitor_header)
+from sim.diagnostics import diagnose_failure, save_unavailable
 
 
 PERIPHERALS = ("MIO_BUS", "SSeg7", "Multi_8CH32", "SPIO", "dm_controller")
@@ -139,13 +140,14 @@ def snapshot(run_dir, kind, suite):
     copies = [ROOT / "main.v", ROOT / "sim/cases.py",
               ROOT / "IO/clk_div.v", ROOT / "IO/Enter.v", ROOT / "IO/Counter_3_IO.v",
               ROOT / "sim/memory.v", ROOT / "sim/judge_top.v", ROOT / "sim/run_testac.cpp",
+              ROOT / "sim/trace_stream.h", ROOT / "sim/trace_compare.py", ROOT / "sim/diagnostics.py",
               ROOT / "sim/animation.py", ROOT / "sim/evaluate.py", ROOT / "sim/convert_edif.py",
               ROOT / "sim/coe_to_hex.py", ROOT / "sim/vendor/xilinx_cells_sim.v"]
     for path in copies:
         shutil.copy2(path, sources / path.name)
     edfs = work / "edf"
     edfs.mkdir()
-    for name in PERIPHERALS:
+    for name in (*PERIPHERALS, "SCPU"):
         shutil.copy2(ROOT / "edf_file" / f"{name}.edf", edfs / f"{name}.edf")
     programs = sources / "programs"
     programs.mkdir()
@@ -280,8 +282,33 @@ def run_case(spec, binary, runtime, run_dir):
     return outcome
 
 
+def compile_submission(work, sources, uploads, kind, run_dir):
+    from execution import ExecutionError, run_command
+    units, reserved = prepare_sources(work, sources, uploads, kind)
+    verilator = shutil.which("verilator")
+    if verilator is None:
+        raise ExecutionError("未安装 Verilator")
+    if kind == "rtl":
+        expanded = sources / "submission_expanded.sv"
+        cpu_units = [path for path in uploads if path.suffix.lower() in {".v", ".sv"}]
+        preprocessor = [verilator, "-E", "-P", "-I" + str(work / "submission")] + [str(path) for path in cpu_units]
+        code = run_command(["/bin/sh", "-c", "exec " + shlex.join(preprocessor) + " > " + shlex.quote(str(expanded))],
+                           cwd=work, run_dir=run_dir, phase="compile", timeout=120)
+        if code != 0:
+            raise InvalidSubmission(f"RTL 预处理失败（退出码 {code}），请查看编译日志")
+        validate_rtl([expanded], reserved)
+        units = [path for path in units if path not in cpu_units] + [expanded]
+    command = [verilator, "--cc", "--exe", "--build", "-j", build_jobs(), "--no-timing",
+               "--timescale-override", "1ns/1ps", "--top-module", "judge_top", "--prefix", "Vjudge_top", "--Mdir", str(work / "build"),
+               "-O3", "-CFLAGS", "-O3 -march=native", "-Wno-fatal", "-Werror-MODDUP", "--output-split", "12000",
+               "--output-split-cfuncs", "1000", "-I" + str(work / "submission"),
+               "-I" + str(sources)] + [str(path) for path in units] + [str(sources / "run_testac.cpp")]
+    code = run_command(command, cwd=work, run_dir=run_dir, phase="compile", timeout=1200)
+    return code
+
+
 def evaluate(run_dir, kind, case_ids=DEFAULT_CASE_IDS):
-    from execution import ExecutionError, ExecutionTimeout, run_command
+    from execution import ExecutionError, ExecutionTimeout
     suite = select_cases(case_ids)
     started = time.monotonic()
     result = {"status": "judge_error", "score": None, "summary": "评测器未完成",
@@ -294,26 +321,7 @@ def evaluate(run_dir, kind, case_ids=DEFAULT_CASE_IDS):
         (run_dir / "tmp").mkdir(exist_ok=True)
         work, sources, runtime, uploads = snapshot(run_dir, kind, suite)
         write_json(runtime / "progress.json", {"cases": result["cases"], "active_case": None})
-        units, reserved = prepare_sources(work, sources, uploads, kind)
-        verilator = shutil.which("verilator")
-        if verilator is None:
-            raise ExecutionError("未安装 Verilator")
-        if kind == "rtl":
-            expanded = sources / "submission_expanded.sv"
-            cpu_units = [path for path in uploads if path.suffix.lower() in {".v", ".sv"}]
-            preprocessor = [verilator, "-E", "-P", "-I" + str(work / "submission")] + [str(path) for path in cpu_units]
-            code = run_command(["/bin/sh", "-c", "exec " + shlex.join(preprocessor) + " > " + shlex.quote(str(expanded))],
-                               cwd=work, run_dir=run_dir, phase="compile", timeout=120)
-            if code != 0:
-                raise InvalidSubmission(f"RTL 预处理失败（退出码 {code}），请查看编译日志")
-            validate_rtl([expanded], reserved)
-            units = [path for path in units if path not in cpu_units] + [expanded]
-        command = [verilator, "--cc", "--exe", "--build", "-j", build_jobs(), "--no-timing",
-                   "--timescale-override", "1ns/1ps", "--top-module", "judge_top", "--prefix", "Vjudge_top", "--Mdir", str(work / "build"),
-                   "-O3", "-CFLAGS", "-O3 -march=native", "-Wno-fatal", "-Werror-MODDUP", "--output-split", "12000",
-                   "--output-split-cfuncs", "1000", "-I" + str(work / "submission"),
-                   "-I" + str(sources)] + [str(path) for path in units] + [str(sources / "run_testac.cpp")]
-        code = run_command(command, cwd=work, run_dir=run_dir, phase="compile", timeout=1200)
+        code = compile_submission(work, sources, uploads, kind, run_dir)
         result["checks"].append({"name": "Verilator 编译", "passed": code == 0, "detail": f"退出码 {code}"})
         if code != 0:
             if compiler_environment_failure(run_dir):
@@ -327,6 +335,14 @@ def evaluate(run_dir, kind, case_ids=DEFAULT_CASE_IDS):
                 result["cases"][index].update(status="running", summary="正在执行真实 CPU 程序")
                 write_json(runtime / "progress.json", {"cases": result["cases"], "active_case": spec.id})
                 outcome = run_case(spec, binary, runtime / spec.id, run_dir)
+                if outcome["status"] in {"wrong_answer", "time_limit"}:
+                    result["cases"][index] = {**outcome, "summary": outcome["summary"] + "；正在复放定位首差"}
+                    write_json(runtime / "progress.json", {"cases": result["cases"], "active_case": spec.id})
+                    outcome["first_diff"] = diagnose_failure(
+                        spec, binary, runtime / spec.id, run_dir, work, sources, outcome)
+                    if outcome["first_diff"]["status"] == "different":
+                        outcome["summary"] += f"；首差周期 {outcome['first_diff']['first_cycle']}"
+                    write_json(runtime / spec.id / "result.json", outcome)
                 result["cases"][index] = outcome
                 write_json(runtime / "progress.json", {"cases": result["cases"], "active_case": None})
                 print(f"用例 {spec.id}：{outcome['status']}，{outcome['summary']}", flush=True)
@@ -356,8 +372,16 @@ def evaluate(run_dir, kind, case_ids=DEFAULT_CASE_IDS):
             if outcome["status"] in {"queued", "running"}:
                 outcome.update(status="compile_error" if result["status"] == "compile_error" else "interrupted",
                                summary="未执行：" + result["summary"])
+            if outcome["status"] != "accepted" and "first_diff" not in outcome:
+                if runtime is None:
+                    runtime = run_dir / "work/runtime"
+                outcome["first_diff"] = save_unavailable(
+                    runtime / outcome["id"], "该用例未完成硬件执行：" + outcome["summary"])
+                write_json(runtime / outcome["id"] / "result.json", outcome)
             for check in outcome["checks"]:
                 result["checks"].append({**check, "name": f"{outcome['label']} · {check['name']}"})
+        result["first_diff"] = next((outcome["first_diff"] for outcome in result["cases"]
+                                     if "first_diff" in outcome), None)
         result["cycles"] = sum(outcome["cycles"] for outcome in result["cases"])
         result["loop"] = next((outcome["loop"] for outcome in result["cases"] if outcome["loop"]), None)
         result["score"] = 100 if result["status"] == "accepted" else 0 if result["status"] in {

@@ -1,19 +1,123 @@
 #include "Vjudge_top.h"
 #include "verilated.h"
 #include "monitor_config.h"
+#include "trace_stream.h"
 
 #include <chrono>
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
 
+namespace {
+
+void step_board(VerilatedContext& context, Vjudge_top& top, uint64_t& half_ticks) {
+    // Each full-board half-tick is 5 ns (the model precision is 1 ps).
+    context.timeInc(5000);
+    ++half_ticks;
+    top.clk = !top.clk;
+    top.eval();
+}
+
+bool parse_cycle_limit(const char* text, uint64_t& value) {
+    if (!text || !*text) return false;
+    value = 0;
+    for (const char* p = text; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+        const unsigned digit = static_cast<unsigned>(*p - '0');
+        if (value > (UINT64_MAX - digit) / 10) return false;
+        value = value * 10 + digit;
+    }
+    return value != 0;
+}
+
+int replay_stream(int argc, char** argv, uint64_t max_cycles) {
+    TraceStream stream;
+    if (!stream.open_fifo(argv[4])) return stream.cancelled() ? 0 : 2;
+    VerilatedContext context;
+    context.commandArgs(argc, argv);
+    Vjudge_top top{&context};
+    uint64_t half_ticks = 0, cycles = 0;
+    bool simulator_failed = false;
+    top.clk = 0;
+    top.rstn = 0;
+    top.eval();
+    // Exactly the normal grader reset, even when the submitted reset PC is bad.
+    for (int i = 0; i < 40 && !context.gotFinish() && !context.gotError(); ++i) {
+        step_board(context, top, half_ticks);
+    }
+    if (!context.gotFinish() && !context.gotError()) {
+        top.rstn = 1;
+        top.eval();
+    }
+    uint32_t record[TraceStream::RECORD_WORDS] = {};
+    while (cycles < max_cycles && !context.gotFinish() && !context.gotError()) {
+        const bool rising = top.cpu_rising_next;
+        const bool old_cpu_clk = top.cpu_clk;
+        if (rising) {
+            record[4] = top.pc;
+            record[6] = top.instruction;
+            record[7] = top.address;
+            record[8] = top.store_data;
+            record[9] = top.load_data;
+            record[10] = top.mem_write;
+            record[11] = top.dm_ctrl;
+        }
+        step_board(context, top, half_ticks);
+        if (rising != (!old_cpu_clk && top.cpu_clk)) {
+            std::fprintf(stderr, "trace replay: board CPU edge prediction mismatch\n");
+            simulator_failed = true;
+            break;
+        }
+        if (rising) {
+            ++cycles;
+            const uint64_t time_ns = half_ticks * 5;
+            record[0] = static_cast<uint32_t>(cycles);
+            record[1] = static_cast<uint32_t>(cycles >> 32);
+            record[2] = static_cast<uint32_t>(time_ns);
+            record[3] = static_cast<uint32_t>(time_ns >> 32);
+            record[5] = top.pc;
+            record[12] = top.display_word;
+            record[13] = top.trace_registers_available ? 1U : 0U;
+            if (top.trace_registers_available) {
+                for (size_t i = 0; i < 10; ++i) record[14 + i] = top.trace_registers[i];
+            }
+            if (!stream.append_record(record)) break;
+        }
+    }
+    if (context.gotFinish() || context.gotError()) {
+        std::fprintf(stderr, "trace replay: simulator stopped unexpectedly at cycle %" PRIu64 "\n", cycles);
+        simulator_failed = true;
+    }
+    top.final();
+    const bool completed = stream.finish();
+    if (stream.cancelled()) return 0;
+    if (!completed) return 2;
+    return simulator_failed ? 3 : 0;
+}
+
+int usage(const char* program) {
+    std::fprintf(stderr,
+        "usage: %s --case CASE [--stream FIFO_PATH --max-cycles POSITIVE_INTEGER]\n", program);
+    return 2;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
-    if (argc != 3 || std::strcmp(argv[1], "--case") != 0) return 2;
+    if ((argc != 3 && argc != 7) || std::strcmp(argv[1], "--case") != 0) return usage(argv[0]);
+    uint64_t replay_cycles = 0;
+    if (argc == 7 && (std::strcmp(argv[3], "--stream") != 0 || !*argv[4]
+            || std::strcmp(argv[5], "--max-cycles") != 0
+            || !parse_cycle_limit(argv[6], replay_cycles))) return usage(argv[0]);
     const CaseSpec* selected = nullptr;
     for (const auto& candidate : CASE_SPECS) {
         if (std::strcmp(argv[2], candidate.id) == 0) selected = &candidate;
     }
-    if (!selected) return 2;
+    if (!selected) {
+        std::fprintf(stderr, "unknown case: %s\n", argv[2]);
+        return 2;
+    }
+    if (argc == 7) return replay_stream(argc, argv, replay_cycles);
     const CaseSpec& spec = *selected;
     const bool program_test = std::strcmp(spec.id, "fastpow") == 0 || std::strcmp(spec.id, "fib") == 0;
     VerilatedContext context;
@@ -29,11 +133,7 @@ int main(int argc, char** argv) {
     const char* status = "time_limit";
     const char* reason = "cycle_limit";
     auto step = [&]() {
-        // 每半周期为 5 ns，执行原板级时钟的全部分频边沿。
-        context.timeInc(5000);
-        ++half_ticks;
-        top.clk = !top.clk;
-        top.eval();
+        step_board(context, top, half_ticks);
     };
     top.clk = 0;
     top.rstn = 0;

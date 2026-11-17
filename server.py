@@ -202,7 +202,7 @@ def case_progress(row):
     if result is not None and "cases" in result:
         return {"cases": result["cases"], "active_case": None}
     progress = directory / "work/runtime/progress.json"
-    if progress.is_file() and not progress.is_symlink() and progress.resolve().is_relative_to(directory):
+    if result is None and progress.is_file() and not progress.is_symlink() and progress.resolve().is_relative_to(directory):
         try:
             data = json.loads(progress.read_text())
             select_cases([item["id"] for item in data["cases"]])
@@ -217,10 +217,12 @@ def case_progress(row):
         case = {**CASES["testac"].public(), "status": row["status"], "summary": row["summary"],
                 "cycles": historical.get("cycles", 0), "frames": (historical.get("native") or {}).get("frames", 0),
                 "checks": historical.get("checks", []), "native": historical.get("native"),
-                "loop": historical.get("loop"), "duration_seconds": historical.get("duration_seconds", 0)}
+                "loop": historical.get("loop"), "duration_seconds": historical.get("duration_seconds", 0),
+                "first_diff": historical.get("first_diff")}
         return {"cases": [case], "active_case": "testac" if row["state"] == "running" else None}
     return {"cases": [{**spec.public(), "status": row["status"] if row["state"] == "finished" else "queued",
-                       "summary": row["summary"], "cycles": 0, "frames": 0, "checks": [], "loop": None}
+                       "summary": row["summary"], "cycles": 0, "frames": 0, "checks": [], "loop": None,
+                       "first_diff": (result or {}).get("first_diff")}
                       for spec in select_cases(ids)], "active_case": None}
 
 

@@ -223,6 +223,7 @@ function renderDetail(run) {
   }
   $("#detail-summary").textContent = run.summary || "没有结果说明。";
   const cases = renderCases(run);
+  FirstDiff.render($("#detail-first-diffs"), cases, { finished: run.state === "finished" });
   const groups = cases.map((item) => ({ label: item.label || item.id, checks: Array.isArray(item.checks) ? item.checks : [] }));
   if (!groups.some((group) => group.checks.length)) groups.push({ label: "整体评测", checks: Array.isArray(run.result?.checks) ? run.result.checks : [] });
   const list = $("#detail-checks");
